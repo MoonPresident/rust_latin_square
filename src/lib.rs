@@ -1,4 +1,5 @@
 
+//Terminal User Interface
 pub mod tui {
 	pub fn print_vec(v: &Vec<u32>) {
 		let mut row = format!("{:>2}", v[0]);
@@ -21,6 +22,19 @@ pub mod math_lib {
 			core::arch::x86_64::_rdrand32_step(val)
 		}
 	}
+
+	pub fn shuffle_vec (v: &mut Vec<u32>) {
+		//For each index, grab a random value stored between that index and the final index
+		//(inclusive of current and final indices) then swap that with the current index.
+		//If the current index is chosen, it remains the same. (Swaps with itself).
+		//Don't add an if statement to check is i == k, it just add cycles in most cases.
+		for i in 0..v.len() - 1 {
+			let k = i + (rand_usize(i) % (v.len() - i));
+			let temp = v[i];
+			v[i] = v[k];
+			v[k] = temp;
+		}
+	}
 	
 	pub fn rand_usize(index: usize) -> usize {
 		let mut val = u32::try_from(index).unwrap();
@@ -30,6 +44,18 @@ pub mod math_lib {
 		usize::try_from(val).unwrap()
 	}
 
+	pub fn test_prime(sieve: &Vec<u32>, test_prime: &u32) -> bool {
+		//A heuristic sqrt(n) search to then logarithmically find how much of the sieve is larger than the sqrt could be good.
+		//This does not protect against sieve[-1] being greater than test_prime
+		for i in 1..sieve.len() {
+			match test_prime % sieve[i] { 
+				0 => return false, 
+				_ => continue
+			}
+		}
+		true
+	}
+
 	pub fn prime_sieve(n: u32) -> Vec<u32> {
 		if n < 2 { return vec!(); }
 		
@@ -37,16 +63,9 @@ pub mod math_lib {
 		let mut test_val = 3;
 		
 		while test_val <= n {
-			let mut include = true;
-
-			for i in 1..sieve.len() {
-				if test_val % sieve[i] == 0 { 
-					include = false; 
-					break; 
-				}
+			if test_prime(&sieve, &test_val) { 
+				sieve.push(test_val); 
 			}
-			
-			if include { sieve.push(test_val); }
 			test_val += 2; 
 		}
 		
@@ -87,28 +106,13 @@ pub mod math_lib {
 			power = power << 1;
 			
 			moving_n = moving_n >> 1;
-			if moving_n == 1 { return u128::from(fac); }
+			if moving_n <= 1 { return u128::from(fac); }
 		}
 	}
 }
 
 pub mod latin_square {
-	use crate::math_lib::rand_usize;
-	use super::tui::print_vec;
-	use std::time::Instant;
-
-	pub fn shuffle(v: &mut Vec<u32>) {
-		//For each index, grab a random value stored between that index and the final index
-		//(inclusive of current and final indices) then swap that with the current index.
-		//If the current index is chosen, it remains the same. (Swaps with itself).
-		//Don't add an if statement to check is i == k, it just add cycles in most cases.
-		for i in 0..v.len() - 1 {
-			let k = i + (rand_usize(i) % (v.len() - i));
-			let temp = v[i];
-			v[i] = v[k];
-			v[k] = temp;
-		}
-	}
+	use crate::math_lib::{ rand_usize, shuffle_vec };
 	
 	/**
 	 * Number of combinations in a line is n! (factorial)
@@ -188,6 +192,7 @@ pub mod latin_square {
 		let n = line.len();
 		let mut local_possibilities = possibilities.clone();
 
+		//Inplace shuffle to reduce allocations.
 		for i in 0..n {
 			let mut misses: usize = 0;
 			
@@ -199,7 +204,7 @@ pub mod latin_square {
 					line[rand_index] = line[i];
 					line[i] = temp;
 					local_possibilities[i] = temp;
-					if !(collapse_row_possibilities(&mut local_possibilities, i)) { println!("NRRRRRRR"); return false; }
+					if !(collapse_row_possibilities(&mut local_possibilities, i)) { /*println!("NRRRRRRR");*/ return false; }
 					break;
 				} else {
 					line[rand_index] = line[n - misses - 1];
@@ -216,15 +221,14 @@ pub mod latin_square {
 		let prototype_line: Vec<u32> = (0..n).into_iter().map(|x| 1 << x).collect();
 		let side_length = prototype_line.len();
 		
-		let unconstrained_value = prototype_line.clone().into_iter().sum();
-		
+		let unconstrained_value = prototype_line.iter().into_iter().sum();
 		let mut possibilities: Vec<u32> = (0..n).into_iter().map(|_x| unconstrained_value).collect();
 		let mut square: Vec<Vec<u32>> = Vec::with_capacity(side_length);
 
 		for i in 0..(side_length - 1) {
 			let mut new_line = prototype_line.clone();
 
-			let mut count: u32= 0;
+			let mut count = 0;
 			loop {
 				if generate_valid_line(&mut new_line, &possibilities) { break; }
 				count += 1;
@@ -242,99 +246,17 @@ pub mod latin_square {
 		square
 	}
 	
-	// pub fn generate_square_prob_collapse(n: u32) -> Vec<Vec<u32>> {
-	// 	let prototype_line: Vec<u32> = (0..n).into_iter().map(|x| 1 << x).collect();
-	// 	let side_length = prototype_line.len();
-	// 	let mut square: Vec<Vec<u32>> = Vec::with_capacity(side_length);
-
-	// 	let mut unconstrained_value = 0;
-	// 	for value in &prototype_line { unconstrained_value |= value; }
-		
-	// 	let empty_line: Vec<u32> = (0..n).into_iter().map(|_x: u32| 0).collect();
-		
-	// 	square.push(prototype_line.clone());
-	// 	shuffle(&mut square[0]);
-
-	// 	let mut col = prototype_line.clone().into_iter().filter(|v| *v != square[0][0]).collect();
-	// 	shuffle(&mut col);
-
-	// 	for j in 1..side_length { 
-	// 		square.push(empty_line.clone()); 
-	// 		square[j][0] = col[j - 1]; 
-	// 	}
-
-	// 	let mut square_dofs: Vec<Vec<u32>> = Vec::with_capacity(side_length);
-	// 	for _i in 0..side_length { square_dofs.push(empty_line.clone()); }
-
-	// 	for i in 1..(1 + side_length / 2) {
-			
-	// 		let mut col = prototype_line.clone();
-	// 		for j in 0..i { col.remove(col.binary_search(&square[j][i]).unwrap()); }
-			
-	// 		loop {
-	// 			shuffle(&mut col);
-	// 			if validate_col(&square, &col, i) { break; }
-	// 		}
-			
-	// 		for j in i..side_length { square[j][i] = col[j - i]; }
-			
-	// 		let mut row = prototype_line.clone();
-	// 		for j in 0..i { row.remove(row.binary_search(&square[i][j]).unwrap()); }
-			
-	// 		loop {
-	// 			shuffle(&mut row);
-	// 			if validate_row(&square, &row, i) { break; }
-	// 		}
-			
-	// 		for j in i..side_length { square[i][j] = row[j - i]; }
-	// 	} 
-		
-	// 	//Filling the square halfway is probably quicker with the above method. More tests later on.
-	// 	let start = 1 + side_length / 2;
-	// 	for i in (1 + side_length / 2)..side_length {
-	// 		for j in (1 + side_length / 2)..side_length {
-	// 			square[i][j] = unconstrained_value;
-	// 			println!("\nCoords {} and {}...", i, j);
-	// 			for m in 0..(start) {println!("Comparing {} to {}.", square[i][j], square[m][j]);
-	// 				square[i][j] &= !square[m][j];
-	// 			}
-	// 			for m in 0..(start) {println!("Comparing {} to {}.", square[i][j], square[i][m]);
-	// 				square[i][j] &= !square[i][m];
-	// 			}
-				
-	// 			//get DOF.
-	// 			square_dofs[i][j] = possible_number_of_values(square[i][j]);
-	// 			if square_dofs[i][j] == 0  { println!("BadExit on 0 at {i}, {j}."); return square; }
-	// 			if square_dofs[i][j] == 1  { 
-	// 				for m in start..(side_length) {println!("Comparing {} to {}.", square[i][j], square[m][j]);
-	// 					if m == i { continue; }
-	// 					square[m][j] &= !square[i][j];
-	// 				}
-	// 				for m in start..(side_length) {println!("Comparing {} to {}.", square[i][j], square[i][m]);
-	// 					if m == i { continue; }
-	// 					square[i][m] &= !square[i][j];
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-		
-	// 	// tui::print_2d_vec(&square);
-		
-	// 	square
-	// }
-	
-	
-	
-	
 	pub fn generate_square_shuffle(n: u32) -> Vec<Vec<u32>> {
-		let prototype_line: Vec<u32> = (1..n + 1).collect();
+		let prototype_line: Vec<u32> = (1..(n + 1)).collect();
 		let side_length = prototype_line.len();
 		let mut square: Vec<Vec<u32>> = Vec::with_capacity(side_length);
 		let mut empty_line: Vec<u32> = Vec::with_capacity(side_length);
+
+		let zero = 0;
 		for _i in 0..side_length { empty_line.push(0); }
 		
 		let mut row = prototype_line.clone();
-		shuffle(&mut row);
+		shuffle_vec(&mut row);
 		square.push(row);
 		for _i in 1..side_length { square.push(empty_line.clone()); }
 		
@@ -345,7 +267,7 @@ pub mod latin_square {
 			
 			let mut count = 0;
 			while count < 1000 {
-				shuffle(&mut col);
+				shuffle_vec(&mut col);
 				if validate_col(&square, &col, i) { break; }
 				count = count + 1;
 			}
@@ -359,7 +281,7 @@ pub mod latin_square {
 			
 			let mut count = 0;
 			while count < 1000 {
-				shuffle(&mut row);
+				shuffle_vec(&mut row);
 				if validate_row(&square, &row, i) { break; }
 				count = count + 1;
 			}
@@ -378,7 +300,13 @@ pub mod latin_square {
 			if square.len() > 0 { return square; }
 		}
 	}
-	
+}
+
+pub mod latin_metrics {
+	use std::time::Instant;
+	// use super::math_lib::Unsigned;
+	use super::latin_square::{ generate_square_prob_collapse, generate_square_shuffle };
+
 	pub fn gen_square_with_metrics(n: u32, count: &mut u32, millis: &mut u128) -> Vec<Vec<u32>> {
 		let timer = Instant::now();
 		loop {
@@ -395,21 +323,23 @@ pub mod latin_square {
 	pub fn gen_square_prob_with_metrics(n: u32, count: &mut u32, millis: &mut u128) -> Vec<Vec<u32>> {
 		let timer = Instant::now();
 		loop {
-			*count = *count + 1;
+			*count += 1;
 			let square: Vec<Vec<u32>> = generate_square_prob_collapse(n);
 			
 			if square.len() > 0 {
 				*millis = timer.elapsed().as_millis();
+				println!("ONWARDS: {}", *count);
 				return square;
+			} else {
 			}
 		}
 	}
-	 
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{latin_square, math_lib, tui};
+	use super::{latin_square,  math_lib, tui};
+	use super::latin_metrics::{ gen_square_prob_with_metrics, gen_square_with_metrics };
 	use std::time::Instant;
 	
 	#[test]
@@ -441,7 +371,7 @@ mod tests {
 		let samples = 10000;
 		for _n in 0..samples {
 			let mut temp = prototype_line.clone();
-			latin_square::shuffle(&mut temp);
+			math_lib::shuffle_vec(&mut temp);
 			
 			for i in 0..prototype_line.len() { avgs[i] = avgs[i] + temp[i]; }
 		}
@@ -463,9 +393,9 @@ mod tests {
 	//could also try [bench] here.
     fn get_samples() {
 		let total_time = Instant::now();
-		let samples = 100;
-		let min_size = 8;
-		let max_size = 11;
+		let samples: u32 = 100;
+		let min_size: u32 = 8;
+		let max_size: u32 = 15;
 		for n in min_size..max_size + 1 {				
 			let mut cum_shuffle_count = 0;
 			let mut cum_shuffle_time = 0;
@@ -474,7 +404,7 @@ mod tests {
 			for _k in 0..samples {
 				let mut count = 0;
 				let mut millis = 0;
-				let result = latin_square::gen_square_with_metrics(n, &mut count, &mut millis);
+				let result = gen_square_with_metrics(n, &mut count, &mut millis);
 				assert!(result.len() == usize::try_from(n).unwrap());
 				
 				cum_shuffle_count = cum_shuffle_count + count;
@@ -484,7 +414,7 @@ mod tests {
 			for _k in 0..samples {
 				let mut count = 0;
 				let mut millis = 0;
-				let result = latin_square::gen_square_prob_with_metrics(n, &mut count, &mut millis);
+				let result = gen_square_prob_with_metrics(n, &mut count, &mut millis);
 				assert!(result.len() == usize::try_from(n).unwrap());
 				
 				cum_wave_collapse_count = cum_wave_collapse_count + count;
@@ -492,7 +422,7 @@ mod tests {
 			}	
 
 			println!("{} by {} Square:", n, n);
-			println!("Average number of attempts:\t{} \t- \t{}", cum_shuffle_count / samples, cum_shuffle_count / samples);
+			println!("Average number of attempts:\t{} \t- \t{}", cum_shuffle_count / samples, cum_wave_collapse_count / samples);
 			println!("Average time:\t{} \t- \t{}", cum_shuffle_time / u128::from(samples), cum_wave_collapse_time / u128::from(samples));
 		}
 		

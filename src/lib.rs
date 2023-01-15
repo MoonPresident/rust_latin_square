@@ -1,12 +1,16 @@
 
 pub mod tui {
+	pub fn print_vec(v: &Vec<u32>) {
+		let mut row = format!("{:>2}", v[0]);
+		for k in 1..v.len() {
+			row = format!("{} {:>2}", row, v[k]);
+		}
+		println!("{}", row);
+	}
+
 	pub fn print_2d_vec(v: &Vec<Vec<u32>>) {
 		for i in 0..v.len() {
-			let mut row = format!("{}", v[i][0]);
-			for k in 1..v.len() {
-				row = format!("{} {}", row, v[i][k]);
-			}
-			println!("{}", row);
+			print_vec(&v[i]);
 		}
 	}
 }
@@ -90,7 +94,7 @@ pub mod math_lib {
 
 pub mod latin_square {
 	use crate::math_lib::rand_usize;
-	use super::tui;
+	use super::tui::print_vec;
 	use std::time::Instant;
 
 	pub fn shuffle(v: &mut Vec<u32>) {
@@ -140,14 +144,18 @@ pub mod latin_square {
 	}
 	
 	fn possible_number_of_values(val: u32) -> u32 {
-		let mut binary_comparitor = 1;
+		let mut target = val;
 		let mut count = 0;
 		
-		while binary_comparitor <= val {
-			if binary_comparitor & val > 0 { count += 1; }
-			if binary_comparitor & 1 << 31 > 0 { break; }
-			binary_comparitor = binary_comparitor << 1;
+		//Kernighan's Algorithm
+		while target != 0 {
+			target = target & (target - 1);
+			count += 1;
 		}
+			// 	if binary_comparitor & val > 0 { count += 1; }
+		// 	if binary_comparitor & 1 << 31 > 0 { break; }
+		// 	binary_comparitor = binary_comparitor << 1;
+		// }
 		
 		count
 	}
@@ -159,87 +167,161 @@ pub mod latin_square {
 	// pub fn possible_col_values(line: Vec<u32>, exclusion_list: Vec<u32>, col: u32) -> Vec<u32> {
 	// 	Vec::new()
 	// }
-	
+	pub fn collapse_row_possibilities(row: &mut Vec<u32>, target: usize) -> bool {
+		for j in 0..row.len() {
+			if j == target { continue; }
+
+			if row[j] & row[target] != 0 {
+				row[j] &= ! row[target];
+				
+				match possible_number_of_values(row[j]) {
+					0 => return false,
+					1 => if !(collapse_row_possibilities(row, j)) { return false; },
+					_ => continue
+				}
+			}
+		}
+		true
+	}
+
+	pub fn generate_valid_line(line: &mut Vec<u32>, possibilities: &Vec<u32>) -> bool {
+		let n = line.len();
+		let mut local_possibilities = possibilities.clone();
+
+		for i in 0..n {
+			let mut misses: usize = 0;
+			
+			loop {
+				let rand_index = i + rand_usize(i) % (n - i - misses);
+				let temp = line[rand_index];
+
+				if local_possibilities[i] & temp > 0 {
+					line[rand_index] = line[i];
+					line[i] = temp;
+					local_possibilities[i] = temp;
+					if !(collapse_row_possibilities(&mut local_possibilities, i)) { println!("NRRRRRRR"); return false; }
+					break;
+				} else {
+					line[rand_index] = line[n - misses - 1];
+					line[n - misses - 1] = temp;
+					misses += 1;
+				}
+			}
+		}
+
+		true
+	}
+
 	pub fn generate_square_prob_collapse(n: u32) -> Vec<Vec<u32>> {
 		let prototype_line: Vec<u32> = (0..n).into_iter().map(|x| 1 << x).collect();
 		let side_length = prototype_line.len();
+		
+		let unconstrained_value = prototype_line.clone().into_iter().sum();
+		
+		let mut possibilities: Vec<u32> = (0..n).into_iter().map(|_x| unconstrained_value).collect();
 		let mut square: Vec<Vec<u32>> = Vec::with_capacity(side_length);
 
-		let mut unconstrained_value = 0;
-		for value in &prototype_line { unconstrained_value |= value; }
-		
-		let empty_line: Vec<u32> = (0..n).into_iter().map(|_x: u32| 0).collect();
-		
-		square.push(prototype_line.clone());
-		shuffle(&mut square[0]);
+		for i in 0..(side_length - 1) {
+			let mut new_line = prototype_line.clone();
 
-		let mut col = prototype_line.clone().into_iter().filter(|v| *v != square[0][0]).collect();
-		shuffle(&mut col);
+			let mut count: u32= 0;
+			loop {
+				if generate_valid_line(&mut new_line, &possibilities) { break; }
+				count += 1;
+				if count == 100 { return Vec::new(); }
+			}
+			
+			square.push(new_line);
 
-		for j in 1..side_length { 
-			square.push(empty_line.clone()); 
-			square[j][0] = col[j - 1]; 
+			for j in 0..side_length {
+				possibilities[j] &= !square[i][j];
+			}
 		}
 
-		let mut square_dofs: Vec<Vec<u32>> = Vec::with_capacity(side_length);
-		for _i in 0..side_length { square_dofs.push(empty_line.clone()); }
-
-		for i in 1..(1 + side_length / 2) {
-			
-			let mut col = prototype_line.clone();
-			for j in 0..i { col.remove(col.binary_search(&square[j][i]).unwrap()); }
-			
-			loop {
-				shuffle(&mut col);
-				if validate_col(&square, &col, i) { break; }
-			}
-			
-			for j in i..side_length { square[j][i] = col[j - i]; }
-			
-			let mut row = prototype_line.clone();
-			for j in 0..i { row.remove(row.binary_search(&square[i][j]).unwrap()); }
-			
-			loop {
-				shuffle(&mut row);
-				if validate_row(&square, &row, i) { break; }
-			}
-			
-			for j in i..side_length { square[i][j] = row[j - i]; }
-		} 
-		
-		//Filling the square halfway is probably quicker with the above method. More tests later on.
-		let start = 1 + side_length / 2;
-		for i in (1 + side_length / 2)..side_length {
-			for j in (1 + side_length / 2)..side_length {
-				square[i][j] = unconstrained_value;
-				println!("\nCoords {} and {}...", i, j);
-				for m in 0..(start) {println!("Comparing {} to {}.", square[i][j], square[m][j]);
-					square[i][j] &= !square[m][j];
-				}
-				for m in 0..(start) {println!("Comparing {} to {}.", square[i][j], square[i][m]);
-					square[i][j] &= !square[i][m];
-				}
-				
-				//get DOF.
-				square_dofs[i][j] = possible_number_of_values(square[i][j]);
-				if square_dofs[i][j] == 0  { println!("BadExit on 0 at {i}, {j}."); return square; }
-				if square_dofs[i][j] == 1  { 
-					for m in start..(side_length) {println!("Comparing {} to {}.", square[i][j], square[m][j]);
-						if m == i { continue; }
-						square[m][j] &= !square[i][j];
-					}
-					for m in start..(side_length) {println!("Comparing {} to {}.", square[i][j], square[i][m]);
-						if m == i { continue; }
-						square[i][m] &= !square[i][j];
-					}
-				}
-			}
-		}
-		
-		// tui::print_2d_vec(&square);
-		
+		square.push(possibilities);
 		square
 	}
+	
+	// pub fn generate_square_prob_collapse(n: u32) -> Vec<Vec<u32>> {
+	// 	let prototype_line: Vec<u32> = (0..n).into_iter().map(|x| 1 << x).collect();
+	// 	let side_length = prototype_line.len();
+	// 	let mut square: Vec<Vec<u32>> = Vec::with_capacity(side_length);
+
+	// 	let mut unconstrained_value = 0;
+	// 	for value in &prototype_line { unconstrained_value |= value; }
+		
+	// 	let empty_line: Vec<u32> = (0..n).into_iter().map(|_x: u32| 0).collect();
+		
+	// 	square.push(prototype_line.clone());
+	// 	shuffle(&mut square[0]);
+
+	// 	let mut col = prototype_line.clone().into_iter().filter(|v| *v != square[0][0]).collect();
+	// 	shuffle(&mut col);
+
+	// 	for j in 1..side_length { 
+	// 		square.push(empty_line.clone()); 
+	// 		square[j][0] = col[j - 1]; 
+	// 	}
+
+	// 	let mut square_dofs: Vec<Vec<u32>> = Vec::with_capacity(side_length);
+	// 	for _i in 0..side_length { square_dofs.push(empty_line.clone()); }
+
+	// 	for i in 1..(1 + side_length / 2) {
+			
+	// 		let mut col = prototype_line.clone();
+	// 		for j in 0..i { col.remove(col.binary_search(&square[j][i]).unwrap()); }
+			
+	// 		loop {
+	// 			shuffle(&mut col);
+	// 			if validate_col(&square, &col, i) { break; }
+	// 		}
+			
+	// 		for j in i..side_length { square[j][i] = col[j - i]; }
+			
+	// 		let mut row = prototype_line.clone();
+	// 		for j in 0..i { row.remove(row.binary_search(&square[i][j]).unwrap()); }
+			
+	// 		loop {
+	// 			shuffle(&mut row);
+	// 			if validate_row(&square, &row, i) { break; }
+	// 		}
+			
+	// 		for j in i..side_length { square[i][j] = row[j - i]; }
+	// 	} 
+		
+	// 	//Filling the square halfway is probably quicker with the above method. More tests later on.
+	// 	let start = 1 + side_length / 2;
+	// 	for i in (1 + side_length / 2)..side_length {
+	// 		for j in (1 + side_length / 2)..side_length {
+	// 			square[i][j] = unconstrained_value;
+	// 			println!("\nCoords {} and {}...", i, j);
+	// 			for m in 0..(start) {println!("Comparing {} to {}.", square[i][j], square[m][j]);
+	// 				square[i][j] &= !square[m][j];
+	// 			}
+	// 			for m in 0..(start) {println!("Comparing {} to {}.", square[i][j], square[i][m]);
+	// 				square[i][j] &= !square[i][m];
+	// 			}
+				
+	// 			//get DOF.
+	// 			square_dofs[i][j] = possible_number_of_values(square[i][j]);
+	// 			if square_dofs[i][j] == 0  { println!("BadExit on 0 at {i}, {j}."); return square; }
+	// 			if square_dofs[i][j] == 1  { 
+	// 				for m in start..(side_length) {println!("Comparing {} to {}.", square[i][j], square[m][j]);
+	// 					if m == i { continue; }
+	// 					square[m][j] &= !square[i][j];
+	// 				}
+	// 				for m in start..(side_length) {println!("Comparing {} to {}.", square[i][j], square[i][m]);
+	// 					if m == i { continue; }
+	// 					square[i][m] &= !square[i][j];
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+		
+	// 	// tui::print_2d_vec(&square);
+		
+	// 	square
+	// }
 	
 	
 	
@@ -370,8 +452,11 @@ mod tests {
 	
 	#[test]
 	fn test_prob_collapse() {
-		let latin = latin_square::generate_square_prob_collapse(5);
-		tui::print_2d_vec(&latin);
+		for i in 0..100 {
+			let latin = latin_square::generate_square_prob_collapse(25);
+			println!();
+			tui::print_2d_vec(&latin);
+		}
 	}
 
     #[test]

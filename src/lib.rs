@@ -18,159 +18,8 @@ pub mod tui {
 
 }
 
-pub mod math_lib {
-
-	pub trait StandardlyDistributable<T> {
-		fn get_standard_distribution(v: Vec<T>) -> Self;
-	}
-
-	pub struct StandardDistribution {
-		// pub data: Vec<f64>,
-		pub mean: f64,
-		pub deviation: f64
-	}
-	// pub struct StandardDistribution<f64> {
-	// 	pub data: Vec<f64>,
-	// 	pub mean: f64,
-	// 	pub deviation: f64
-	// }
-	
-	impl StandardlyDistributable<u32> for StandardDistribution {
-		fn get_standard_distribution(v: Vec<u32>) -> Self {
-			let n = f64::from(u32::try_from(v.len()).unwrap());
-			let summation = f64::from(v.iter().sum::<u32>());
-			let mean = summation/ n;
-
-			let mut deviation = 0.0;
-			for i in 0..v.len() {
-				let x_f = f64::from(v[i]);
-				deviation += x_f * x_f - 2.0 * mean * x_f + mean * mean;
-			}
-
-			deviation /= f64::from(u32::try_from(v.len() - 1).unwrap());
-			return StandardDistribution { mean, deviation };
-		}
-	}
-
-	pub fn test_sd() -> StandardDistribution {
-		let line = (0..10).collect();
-		let s_dist = StandardDistribution::get_standard_distribution(line);
-		s_dist
-	}
-
-	impl StandardlyDistributable<f64> for StandardDistribution {
-		fn get_standard_distribution(v: Vec<f64>) -> Self {
-			let summation:f64 = v.iter().sum();
-			let mean = summation / f64::from(u32::try_from(v.len()).unwrap());
-
-			let mut deviation = 0.0;
-			for i in 0..v.len() {
-				let x_f = v[i];
-				deviation += x_f * x_f - 2.0 * mean * x_f + mean * mean;
-			}
-
-			deviation /= f64::from(u32::try_from(v.len() - 1).unwrap());
-
-			return StandardDistribution { mean, deviation };
-		}
-	}
-
-	pub fn rand(val: &mut u32) -> i32 {
-		unsafe {
-			core::arch::x86_64::_rdrand32_step(val)
-		}
-	}
-	
-	pub fn rand_usize(index: usize) -> usize {
-		let mut val = u32::try_from(index).unwrap();
-		unsafe {
-			core::arch::x86_64::_rdrand32_step(&mut val);
-		}
-		usize::try_from(val).unwrap()
-	}
-
-	pub fn shuffle_vec (v: &mut Vec<u32>) {
-		//For each index, grab a random value stored between that index and the final index
-		//(inclusive of current and final indices) then swap that with the current index.
-		//If the current index is chosen, it remains the same. (Swaps with itself).
-		//Don't add an if statement to check is i == k, it just add cycles in most cases.
-		for i in 0..v.len() - 1 {
-			let k = i + (rand_usize(i) % (v.len() - i));
-			let temp = v[i];
-			v[i] = v[k];
-			v[k] = temp;
-		}
-	}
-
-	pub fn test_prime(sieve: &Vec<u32>, test_prime: &u32) -> bool {
-		//A heuristic sqrt(n) search to then logarithmically find how much of the sieve is larger than the sqrt could be good.
-		//This does not protect against sieve[-1] being greater than test_prime
-		for i in 1..sieve.len() {
-			match test_prime % sieve[i] { 
-				0 => return false, 
-				_ => continue
-			}
-		}
-		true
-	}
-
-	pub fn prime_sieve(n: u32) -> Vec<u32> {
-		if n < 2 { return vec!(); }
-		
-		let mut sieve = vec!(2);
-		let mut test_val = 3;
-		
-		while test_val <= n {
-			if test_prime(&sieve, &test_val) { 
-				sieve.push(test_val); 
-			}
-			test_val += 2; 
-		}
-		
-		sieve
-	}
-	
-	pub fn factorial(n: u32) -> u128 {
-		if n == 0 || n == 1 { return 1; }
-		if n == 2 { return 2; }
-		if n < 2 {
-			let mut fac: u32 = 2;
-			for f in 3..n+1 { fac *= f; }
-			return u128::from(fac);
-		}
-		
-		let mut fac: u128 = 1;
-		let sieve = prime_sieve(n);
-		let mut moving_n = n;
-		println!("");
-		let mut power = 1;
-		loop {
-			let mut swing_fac:u128 = 1;
-			
-			for p in sieve.iter() {
-				if p > &moving_n { break; }
-				let mut q = moving_n;
-				let mut f = 1;
-				
-				while q > 1 {
-					q /= p;
-					if q & 1 > 0 { f *= p; }
-				}
-				
-				swing_fac *= u128::from(f);
-			}
-			
-			fac *= swing_fac.pow(power);
-			power = power << 1;
-			
-			moving_n = moving_n >> 1;
-			if moving_n <= 1 { return u128::from(fac); }
-		}
-	}
-}
-
 pub mod latin_square {
-	use crate::math_lib::rand_usize;
+	use moon_math::moon_math::rand_usize;
 	pub type UBitRep = u128;
 	pub type UDisplayRep = u32;
 
@@ -180,12 +29,16 @@ pub mod latin_square {
 
 	pub struct LatinSquare<S> {
 		pub square: Vec<Vec<UBitRep>>,
-		pub heuristic: S
+		pub rules: S
 	}
 
 	pub trait LatinSquareSolver {		
-		fn heuristic_solve(&self, mut working_square: Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
+		fn heuristic_solve(&self, working_square: Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
 			return working_square;
+		}
+
+		fn heuristic_place(&self, working_square: &Vec<Vec<UBitRep>>, new_value: &UBitRep, k: usize, j: usize) -> bool {
+			return true;
 		}
 	}
 
@@ -196,18 +49,47 @@ pub mod latin_square {
 
 	pub struct SudokuSolver;
 
-	impl LatinSquareSolver for SudokuSolver {
+	/*impl LatinSquareSolver for SudokuSolver {
 		fn heuristic_solve(&self, mut working_square: Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
 			let side_length = working_square.len();
 			if side_length != 9 { panic!("Sudoku has been made that is not side length 9."); }
 
-			for i in 0..side_length {
+			for subsquare in 0..side_length {
+				let col_start = subsquare % 3;
+				let row_start = subsquare / 3;
+				let mut row_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
+				let mut col_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
+				
+				for i in 0..3 {
+					for j in 0..3 {
+						let target = working_square[row_start + i][col_start + j];
+						if count_cell_possibilities(target) > 0 {
 
+							for k in 0..side_length {
+								if 1 << k & target > 0 {
+									row_possibility_array[i][k] = 1;
+									col_possibility_array[j][k] = 1;
+								}
+							}
+
+						}
+					}
+				}
+
+				for i in 0..side_length {
+					if row_possibility_array[i].iter().sum::<usize>() == 1 {
+						//clean this value from the rest of this row for the working square.
+					}
+
+					if col_possibility_array[i].iter().sum::<usize>() == 1 {
+						//clean this value from the rest of this row for the working square.
+					}
+				}
 			}
 			
 			return working_square;
 		}
-	} 
+	} */
 	
 	// pub struct KillerSudokuSquare: SudokuSquare {
 	//	n: constant(9),
@@ -236,94 +118,107 @@ pub mod latin_square {
 		pub fn solve(&self) -> Vec<Vec<Vec<UBitRep>>> {
 			let side_length = self.square.len();
 			let mut solutions = Vec::new();
-			let mut possible_solutions = Vec::new();
+			let mut partial_solutions = Vec::new();
 			
-			let mut working_square = preprocess(&self.square);
-			let mut previous_cum_cell_possibility = UBitRep::MAX;
-
-			let mut analytics;
-			super::tui::print_2d_vec(&working_square);
+			let mut analytics = LatinAnalytics::default();
 			let mut count = 0;
+			
+			let mut working_square = Self::preprocess(&self, &self.square);
 			loop {
-				working_square = self.heuristic.heuristic_solve(working_square);
-				analytics = analyse_square(&working_square);
-				
-				if analytics.cumulative_possibilities == 0 {
-					super::tui::print_2d_vec(&working_square);
-					if analytics.valid {
-						solutions.push(working_square);
-						println!("Pushing number {}", solutions.len());
+				loop {
+					working_square = self.rules.heuristic_solve(working_square);
+					analytics = analyse_square(&working_square, analytics);
+					if analytics.cumulative_possibilities == 0 || !analytics.analytics_updated { 
+						break; 
 					}
-
-					
-					println!("Popping number {}", possible_solutions.len());
-					match possible_solutions.pop() {
-						Some(s) => working_square = s,
-						None => return solutions
-					}
-					previous_cum_cell_possibility = UBitRep::MAX;
-					continue;
 				}
-
-				//If the loop wraps around with no progress, make a guess.
-				if previous_cum_cell_possibility == analytics.cumulative_possibilities {
+				
+				if analytics.cumulative_possibilities == 0 && analytics.valid {
+					solutions.push(working_square);
+				}  else if !analytics.analytics_updated {
+					//If the loop wraps around with no progress, make a guess.
 					let (i, j) = analytics.lowest_possibilities;
-					
-					for k in 0..side_length {
-						let new_val = 1 << k & working_square[i][j];
-						if new_val == 0 { continue; }
-
+					let cell = working_square[i][j];
+					let branching_values: Vec<UBitRep> = (0..side_length).map(|x| 1 << x & cell).filter(|x| *x > 0).collect();
+					for new_val in branching_values {
 						let mut new_square = working_square.clone(); 
-						if place(&mut new_square, &new_val, i, j) {
-							possible_solutions.push(new_square);
+						if self.place(&mut new_square, &new_val, i, j) {
+							partial_solutions.push(new_square);
 						}
 					}
-					
-					println!("Popping number {}", possible_solutions.len());
-					match possible_solutions.pop() {
-						Some(s) => working_square = s,
-						None => return solutions
-					}
-					previous_cum_cell_possibility = UBitRep::MAX;
-					continue;
 				}
 
-				previous_cum_cell_possibility = analytics.cumulative_possibilities;
+				match partial_solutions.pop() {
+					Some(s) => working_square = s,
+					None => return solutions
+				}
 
 				count += 1;
-				if count == 100 { println!("Possible solutions: {}", possible_solutions.len()); return solutions; }
+				if count == 100 { println!("Partial solutions: {}", partial_solutions.len()); return solutions; }
 			}
+		}
+
+		pub fn place(&self, working_square: &mut Vec<Vec<UBitRep>>, value: &UBitRep, i: usize, j: usize) -> bool {
+			let side_length = working_square.len();
+			if working_square[i][j] & value == 0 { return false; }//panic?
+			
+			working_square[i][j] = *value;
+			
+			let mut coords: Vec<(usize, usize)> = (0..side_length).filter(|k| *k != i).map(|k| (k, j)).collect();
+			let mut col_coords: Vec<(usize, usize)> = (0..side_length).filter(|k| *k != j).map(|k| (i, k)).collect();
+			coords.append(&mut col_coords);
+
+			for coord in coords {
+				if working_square[coord.0][coord.1] & value > 0 {
+					working_square[coord.0][coord.1] &= !value;
+
+					let target = working_square[coord.0][coord.1];
+					if target == 0 {
+						return false;
+					}
+					let possibility_check = target & (target - 1);
+					if possibility_check == 0 {
+						let new_value = target;
+						self.place(working_square, &new_value, coord.0, coord.1);
+						self.rules.heuristic_place(working_square, &new_value, coord.0, coord.1);
+					}	
+				}
+			}
+			true
+		}
+		
+		pub fn preprocess(&self, square: &Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
+			//1. Scan possibility map
+			//a. create unconstrained val.
+			let side_length = square.len();
+			let unconstrained_value: UBitRep = (0..side_length).into_iter().map(|x| 1 << x).sum();
+
+			//b. for any empty cell, insert the unconstrained value
+			let mut working_square = (0..side_length).into_iter()
+				.map(|_x| (0..side_length).into_iter()
+					.map(|_x| unconstrained_value)
+				.collect())
+			.collect();
+
+			for i in 0..side_length {
+				for j in 0..side_length {
+					//let this panic maybe?
+					if square[i][j] == 0 || square[i][j] & (square[i][j] - 1) > 0 { continue; }
+					Self::place(&self, &mut working_square, &square[i][j], i, j);
+				}
+			}
+
+			return working_square;
 		}
 	}
 	
-	pub fn preprocess(square: &Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
-		//1. Scan possibility map
-		//a. create unconstrained val.
-		let side_length = square.len();
-		let unconstrained_value: UBitRep = (0..side_length).into_iter().map(|x| 1 << x).sum();
-
-		//b. for any empty cell, insert the unconstrained value
-		let mut working_square = (0..side_length).into_iter()
-			.map(|_x| (0..side_length).into_iter()
-				.map(|_x| unconstrained_value)
-			.collect())
-		.collect();
-
-		for i in 0..side_length {
-			for j in 0..side_length {
-				//let this panic maybe?
-				if square[i][j] == 0 || square[i][j] & (square[i][j] - 1) > 0 { continue; }
-				place(&mut working_square, &square[i][j], i, j);
-			}
-		}
-
-		return working_square;
-	}
+	
 
 	struct LatinAnalytics {
 		valid: bool,
 		cumulative_possibilities: UBitRep,
-		lowest_possibilities: (usize, usize)
+		lowest_possibilities: (usize, usize),
+		analytics_updated: bool
 	}
 
 	impl Default for LatinAnalytics {
@@ -331,15 +226,16 @@ pub mod latin_square {
 			return LatinAnalytics {
 				valid: false,
 				cumulative_possibilities: 0,
-				lowest_possibilities: (0, 0)
+				lowest_possibilities: (0, 0),
+				analytics_updated: false,
 			}
 		}
 	}
 
-	fn analyse_square(square: &Vec<Vec<UBitRep>>) -> LatinAnalytics {
+	fn analyse_square(square: &Vec<Vec<UBitRep>>, prev_analytics: LatinAnalytics) -> LatinAnalytics {
 		let side_length = square.len();
 
-		let mut current_cum_cell_possibility = 0;
+		let mut cumulative_possibilities = 0;
 		let mut lowest_possibility = UBitRep::MAX;
 		let mut lowest_possibility_coordinates = (0, 0);
 
@@ -350,20 +246,21 @@ pub mod latin_square {
 		for i in 0..side_length {
 			for j in 0..side_length {
 				let cell_possibilities = count_cell_possibilities(square[i][j]);
-				if cell_possibilities == 0 { println!("Bad line."); return LatinAnalytics::default(); }
+				if cell_possibilities == 0 { return LatinAnalytics::default(); }
 				if cell_possibilities == 1 { continue; }
 				if cell_possibilities < lowest_possibility {
 					lowest_possibility = cell_possibilities;
 					lowest_possibility_coordinates = (i, j);
 				}
-				current_cum_cell_possibility += cell_possibilities;
+				cumulative_possibilities += cell_possibilities;
 			}
 		}
 
 		return LatinAnalytics{ 
 			valid: true, 
-			cumulative_possibilities: current_cum_cell_possibility, 
-			lowest_possibilities: lowest_possibility_coordinates 
+			cumulative_possibilities: cumulative_possibilities, 
+			lowest_possibilities: lowest_possibility_coordinates,
+			analytics_updated: prev_analytics.cumulative_possibilities != cumulative_possibilities
 		};
 	}
 
@@ -373,42 +270,6 @@ pub mod latin_square {
 			if square.len() > 0 { return square; }
 		}
 	}
-
-	pub fn place(working_square: &mut Vec<Vec<UBitRep>>, value: &UBitRep, i: usize, j: usize) -> bool {
-		let side_length = working_square.len();
-		if working_square[i][j] & value == 0 { return false; }//panic?
-		
-		working_square[i][j] = *value;
-		
-		for k in 0..side_length {
-			if k != i && working_square[k][j] & value > 0 {
-				working_square[k][j] &= !value;
-				if working_square[k][j] == 0 {
-					return false;
-				}
-				let possibility_check = working_square[k][j] & (working_square[k][j] - 1);
-				if possibility_check == 0 {
-					let new_value = working_square[k][j];
-					place(working_square, &new_value, k, j);
-				}	
-			}
-
-			if k != j && working_square[i][k] & value > 0 {
-				working_square[i][k] &= !value;
-				if working_square[i][k] == 0 {
-					return false;
-				}
-				let possibility_check = working_square[i][k] & (working_square[i][k] - 1);
-				if possibility_check == 0 {
-					let new_value = working_square[i][k];
-					place(working_square, &new_value, i, k);
-				}	
-			}
-		}
-		true
-	}
-
-	
 
 	/**
 	 * Removes n filled cells from the latin square, or all of the remaining cells
@@ -563,7 +424,6 @@ pub mod latin_square {
 
 pub mod latin_metrics {
 	use std::time::Instant;
-	// use super::math_lib::Unsigned;
 	use super::latin_square::{ generate_square_prob_collapse, UBitRep };
 
 	pub fn gen_square_prob_with_metrics(n: usize, count: &mut u32, millis: &mut u128) -> Vec<Vec<UBitRep>> {
@@ -583,30 +443,11 @@ pub mod latin_metrics {
 
 #[cfg(test)]
 mod tests {
-	use crate::math_lib::{ StandardlyDistributable, StandardDistribution };
+	use moon_stats::moon_stats::{ StandardlyDistributable, StandardDistribution };
 	use super::latin_square::*;
-	use super::math_lib;
+	use moon_math::moon_math;
 	use super::latin_metrics::gen_square_prob_with_metrics;
 	use std::time::Instant;
-	
-	#[test]
-	#[ignore]
-	fn test_prime_sieve() {
-		assert_eq!(math_lib::prime_sieve(2), vec!(2));
-		assert_eq!(math_lib::prime_sieve(3), vec!(2, 3));
-		assert_eq!(math_lib::prime_sieve(4), vec!(2, 3));
-		assert_eq!(math_lib::prime_sieve(6), vec!(2, 3, 5));
-		assert_eq!(math_lib::prime_sieve(15), vec!(2, 3, 5, 7, 11, 13));
-	}
-	
-	#[test]
-	#[ignore]
-	fn test_factorial() {
-		let facs = vec!(1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800, 39916800, 479001600);
-		for i in 0..facs.len() {
-			assert_eq!(math_lib::factorial(u32::try_from(i).unwrap()), facs[i]);
-		}
-	}
 	
 	#[test]
 	#[ignore]
@@ -616,29 +457,34 @@ mod tests {
 		
 		let samples = 10000;
 		for _n in 0..samples {
-			math_lib::shuffle_vec(&mut line);
+			moon_math::shuffle_vec(&mut line);
 			avgs = (0..line.len()).map(|i| avgs[i] + line[i]).collect();
 		}
 
 		avgs = avgs.into_iter().map(|x| (10 * x + 1) / samples).collect();
 		assert!(avgs.iter().max().unwrap() - avgs.iter().min().unwrap() <= 1);
 	}
+
+	fn validate_latin_square<T: std::cmp::PartialEq>(latin_square: &Vec<Vec<T>>){
+		let side_length = latin_square.len();
+		for i in 0..side_length {
+			for j in 0..side_length {
+				if i == j { continue; }
+				assert!(latin_square[i][i] != latin_square [i][j]);
+				assert!(latin_square[i][i] != latin_square [j][i]);
+			}
+		}
+	}
 	
 	#[test]
 	fn test_prob_collapse() {
-		let n = 60;
+		let n = 20;
 		let side_length = usize::try_from(n).unwrap();
 		let samples = 10;
 		for _i in 0..samples {
 			let latin_square = display_format(gen_square(n));
 
-			for i in 0..side_length {
-				for j in 0..side_length {
-					if i == j { continue; }
-					assert!(latin_square[i][i] != latin_square [i][j]);
-					assert!(latin_square[i][i] != latin_square [j][i]);
-				}
-			}
+			validate_latin_square(&latin_square);
 			// tui::print_2d_vec(&latin_square);
 		}
 	}
@@ -675,22 +521,22 @@ mod tests {
 	//could also try [bench] here.
     fn get_samples() {
 		let total_time = Instant::now();
-		let samples = 10;
-		let min_size = 30;
+		let samples: u32 = 10;
+		let min_size = 40;
 		let max_size = 50;
 
 		for n in min_size..max_size + 1 {
-			let mut cum_count = 0;
+			let mut cum_attempts = 0;
 			let mut cum_time_millis = 0;
 			
 			for _k in 0..samples {
-				let result = gen_square_prob_with_metrics(n, &mut cum_count, &mut cum_time_millis);
+				let result = gen_square_prob_with_metrics(n, &mut cum_attempts, &mut cum_time_millis);
 				assert!(result.len() == usize::try_from(n).unwrap());
 			}	
 
-			println!("{} by {} Square:", n, n);
-			println!("Average number of attempts:\t{}", cum_count / samples);
-			println!("Average time:\t{}", cum_time_millis / u128::from(samples));
+			//Not intended for more than 2 digits.
+			let average_attempts = f64::try_from(cum_attempts).unwrap() / f64::try_from(samples).unwrap();
+			println!("N: {:>2} | {:>3} | {:>3} |", n, cum_attempts, average_attempts);
 		}
 
 		println!("Test suite ran for {} seconds.", total_time.elapsed().as_secs());
@@ -734,9 +580,16 @@ mod tests {
 		latin_square[0][0] |= latin_square[i][j];
 		let val = latin_square[i][j];
 		latin_square[i][j] = 31;
+		
+		let latin = LatinSquare {
+			square: latin_square.clone(),
+			rules: DefaultLatinSolver
+		};
 
-		place(&mut latin_square, &val, i, j);
-		super::tui::print_2d_vec(&latin_square);
+
+		super::tui::print_2d_vec(&latin.square);
+		latin.place(&mut latin_square, &val, i, j);
+		super::tui::print_2d_vec(&latin.square);
 
 		assert!(latin_square[0] == test_vec);
 	}
@@ -750,14 +603,14 @@ mod tests {
 		super::tui::print_2d_vec(&latin_square);
 		println!();
 
-		latin_square = cull(latin_square, 2 * n * n / 3);
+		latin_square = cull(latin_square, 3 * n * n / 5);
 		super::tui::print_2d_vec(&latin_square);
 		println!();
 		// let latin_squares = solve(latin_square);
 
 		let latin = LatinSquare {
 			square: latin_square,
-			heuristic: DefaultLatinSolver
+			rules: DefaultLatinSolver
 		};
 
 		let latin_squares = latin.solve();

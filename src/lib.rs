@@ -24,7 +24,6 @@ pub mod latin_square {
 	pub type UDisplayRep = u32;
 
 	//TODO:
-	//Verify that solve works.
 	//Let solve be extended by polymorphism.
 
 	pub struct LatinSquare<S> {
@@ -32,12 +31,16 @@ pub mod latin_square {
 		pub rules: S
 	}
 
-	pub trait LatinSquareSolver {		
+	pub trait LatinSquareSolver {
+		fn generate(&self, n: usize) -> Vec<Vec<UBitRep>> {
+			return gen_square(n);
+		}	
+
 		fn heuristic_solve(&self, working_square: Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
 			return working_square;
 		}
 
-		fn heuristic_place(&self, working_square: &Vec<Vec<UBitRep>>, new_value: &UBitRep, k: usize, j: usize) -> bool {
+		fn heuristic_place(&self, working_square: &Vec<Vec<UBitRep>>, value: &UBitRep, i: usize, j: usize) -> bool {
 			return true;
 		}
 	}
@@ -49,47 +52,92 @@ pub mod latin_square {
 
 	pub struct SudokuSolver;
 
-	/*impl LatinSquareSolver for SudokuSolver {
-		fn heuristic_solve(&self, mut working_square: Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
-			let side_length = working_square.len();
-			if side_length != 9 { panic!("Sudoku has been made that is not side length 9."); }
+	// impl LatinSquareSolver for SudokuSolver {
+	// 	// fn heuristic_constraint(&self, mut working_square)
+	// 	fn heuristic_solve(&self, mut working_square: Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
+	// 		let side_length = working_square.len();
+	// 		if side_length != 9 { panic!("Sudoku has been made that is not side length 9."); }
 
-			for subsquare in 0..side_length {
-				let col_start = subsquare % 3;
-				let row_start = subsquare / 3;
-				let mut row_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
-				let mut col_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
+	// 		for subsquare in 0..side_length {
+	// 			let mut col_start = subsquare % 3;
+	// 			col_start *= 3;
+	// 			let mut row_start = subsquare / 3;
+	// 			row_start *= 3;
+	// 			let mut row_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
+	// 			let mut col_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
 				
-				for i in 0..3 {
-					for j in 0..3 {
-						let target = working_square[row_start + i][col_start + j];
-						if count_cell_possibilities(target) > 0 {
+	// 			for i in 0..3 {
+	// 				for j in 0..3 {
+	// 					let target = working_square[row_start + i][col_start + j];
+	// 					if count_cell_possibilities(target) > 0 {
 
-							for k in 0..side_length {
-								if 1 << k & target > 0 {
-									row_possibility_array[i][k] = 1;
-									col_possibility_array[j][k] = 1;
-								}
-							}
+	// 						for k in 0..side_length {
+	// 							if 1 << k & target > 0 {
+	// 								row_possibility_array[i][k] = 1;
+	// 								col_possibility_array[j][k] = 1;
+	// 							}
+	// 						}
 
-						}
-					}
-				}
+	// 					}
+	// 				}
+	// 			}
 
-				for i in 0..side_length {
-					if row_possibility_array[i].iter().sum::<usize>() == 1 {
-						//clean this value from the rest of this row for the working square.
-					}
+	// 			for i in 0..side_length {
+	// 				if row_possibility_array[i].iter().sum::<usize>() == 1 {
+	// 					let mut k = 0;
+	// 					while(row_possibility_array[i][k] == 0) { k += 1; }
 
-					if col_possibility_array[i].iter().sum::<usize>() == 1 {
-						//clean this value from the rest of this row for the working square.
-					}
-				}
-			}
+	// 					// for col in 0..col_start {
+	// 					// 	working_square
+	// 					// }
+
+	// 					//clean this value from the rest of this row for the working square.
+	// 				}
+
+	// 				if col_possibility_array[i].iter().sum::<usize>() == 1 {
+	// 					//clean this value from the rest of this row for the working square.
+	// 				}
+	// 			}
+	// 		}
 			
-			return working_square;
-		}
-	} */
+	// 		return working_square;
+	// 	}
+
+	// 	fn heuristic_place(&self, mut working_square: &Vec<Vec<UBitRep>>, value: &UBitRep, i: usize, j: usize) -> bool {
+	// 		//for now assume 9
+	// 		let side_length = working_square.len();
+	// 		let mut cell_row = i / 3;
+	// 		cell_row *= 3;
+	// 		let mut cell_col = j / 3;
+	// 		cell_col *= 3;
+
+	// 		let mut coords: Vec<(usize, usize)> = Vec::with_capacity(side_length - 1);
+
+	// 		for row in cell_row..cell_row + 3 {
+	// 			for col in cell_col..cell_col + 3 {
+	// 				if row == i && col == j { continue; }
+	// 				coords.push((row, col));
+	// 			}
+	// 		}
+
+	// 		for coord in coords {
+	// 			if working_square[coord.0][coord.1] & value > 0 {
+	// 				working_square[coord.0][coord.1] &= !value;
+
+	// 				let target = working_square[coord.0][coord.1];
+	// 				if target == 0 {
+	// 					return false;
+	// 				}
+	// 				let possibility_check = target & (target - 1);
+	// 				if possibility_check == 0 {
+	// 					let new_value = target;
+	// 					self.heuristic_place(&mut working_square, &new_value, coord.0, coord.1);
+	// 				}	
+	// 			}
+	// 		}
+	// 		true
+	// 	}
+	// }
 	
 	// pub struct KillerSudokuSquare: SudokuSquare {
 	//	n: constant(9),
@@ -197,14 +245,14 @@ pub mod latin_square {
 			let mut working_square = (0..side_length).into_iter()
 				.map(|_x| (0..side_length).into_iter()
 					.map(|_x| unconstrained_value)
-				.collect())
-			.collect();
+					.collect())
+				.collect();
 
 			for i in 0..side_length {
 				for j in 0..side_length {
 					//let this panic maybe?
 					if square[i][j] == 0 || square[i][j] & (square[i][j] - 1) > 0 { continue; }
-					Self::place(&self, &mut working_square, &square[i][j], i, j);
+					self.place(&mut working_square, &square[i][j], i, j);
 				}
 			}
 
@@ -262,13 +310,6 @@ pub mod latin_square {
 			lowest_possibilities: lowest_possibility_coordinates,
 			analytics_updated: prev_analytics.cumulative_possibilities != cumulative_possibilities
 		};
-	}
-
-	pub fn gen_square(n: usize) -> Vec<Vec<UBitRep>> {
-		loop {
-			let square = generate_square_prob_collapse(n);
-			if square.len() > 0 { return square; }
-		}
 	}
 
 	/**
@@ -363,81 +404,39 @@ pub mod latin_square {
 		true
 	}
 
-	pub fn generate_valid_line(line: &mut Vec<UBitRep>, possibilities: &Vec<UBitRep>) -> bool {
-		let n = line.len();
-		let mut local_possibilities = possibilities.clone();
+	pub fn gen_square(n: usize) -> Vec<Vec<UBitRep>> {
+		let side_length = n;
+		let mut square: Vec<Vec<UBitRep>> = Vec::with_capacity(side_length);
+		for i in 0..side_length {
+			let mut new_line: Vec<UBitRep> = (i..n).into_iter().map(|x| 1 << x).collect();
+			let mut new_line_back: Vec<UBitRep> = (0..i).into_iter().map(|x| 1 << x).collect();
+			new_line.append(&mut new_line_back);
+			square.push(new_line);
+		}
 
-		//Inplace shuffle to reduce allocations.
-		for i in 0..n {
-			let mut misses: usize = 0;
-			
-			loop {
-				let rand_index = i + rand_usize(i) % (n - i - misses);
-				let temp = line[rand_index];
+		for i in 0..side_length - 1 {
+			let target = side_length - i - 1;
+			let mut source = rand_usize(target) % (target + 1);
 
-				if local_possibilities[i] & temp > 0 {
-					line[rand_index] = line[i];
-					line[i] = temp;
-					local_possibilities[i] = temp;
-					if !(collapse_row_possibilities(&mut local_possibilities, i)) { /*println!("NRRRRRRR");*/ return false; }
-					break;
-				} else {
-					line[rand_index] = line[n - misses - 1];
-					line[n - misses - 1] = temp;
-					misses += 1;
+			if target != source {
+				let temp = square[target].clone();
+				square[target] = square[source].clone();
+				square[source] = temp;
+			}
+
+			source = rand_usize(target) % (target + 1);
+
+			if target != source {
+				for j in 0..side_length {
+					let temp = square[j][target];
+					square[j][target] = square[j][source];
+					square[j][source] = temp;
 				}
 			}
+
 		}
 
-		true
-	}
-
-	pub fn generate_square_prob_collapse(n: usize) -> Vec<Vec<UBitRep>> {
-		let prototype_line: Vec<UBitRep> = (0..n).into_iter().map(|x| 1 << x).collect();
-		let side_length = prototype_line.len();
-		
-		let unconstrained_value = prototype_line.iter().sum();
-		let mut possibilities: Vec<UBitRep> = (0..n).into_iter().map(|_x| unconstrained_value).collect();
-		let mut square: Vec<Vec<UBitRep>> = Vec::with_capacity(side_length);
-
-		for i in 0..(side_length - 1) {
-			let mut new_line = prototype_line.clone();
-
-			let mut count = 0;
-			loop {
-				if generate_valid_line(&mut new_line, &possibilities) { break; }
-				count += 1;
-				if count == 100 { return Vec::new(); }
-			}
-			
-			square.push(new_line);
-
-			for j in 0..side_length {
-				possibilities[j] &= !square[i][j];
-			}
-		}
-
-		square.push(possibilities);
 		square
-	}
-}
-
-pub mod latin_metrics {
-	use std::time::Instant;
-	use super::latin_square::{ generate_square_prob_collapse, UBitRep };
-
-	pub fn gen_square_prob_with_metrics(n: usize, count: &mut u32, millis: &mut u128) -> Vec<Vec<UBitRep>> {
-		let timer = Instant::now();
-		loop {
-			*count += 1;
-			let square: Vec<Vec<UBitRep>> = generate_square_prob_collapse(n);
-			
-			if square.len() > 0 {
-				*millis = timer.elapsed().as_millis();
-				return square;
-			} else {
-			}
-		}
 	}
 }
 
@@ -446,7 +445,6 @@ mod tests {
 	use moon_stats::moon_stats::{ StandardlyDistributable, StandardDistribution };
 	use super::latin_square::*;
 	use moon_math::moon_math;
-	use super::latin_metrics::gen_square_prob_with_metrics;
 	use std::time::Instant;
 	
 	#[test]
@@ -479,23 +477,22 @@ mod tests {
 	#[test]
 	fn test_prob_collapse() {
 		let n = 20;
-		let side_length = usize::try_from(n).unwrap();
 		let samples = 10;
 		for _i in 0..samples {
 			let latin_square = display_format(gen_square(n));
-
+			super::tui::print_2d_vec(&latin_square);
 			validate_latin_square(&latin_square);
-			// tui::print_2d_vec(&latin_square);
 		}
 	}
 
 	#[test]
 	#[ignore]
 	fn wave_collapse_distribution_statistics() {
-		let samples = 10;
+		let samples = 100;
 		let size = 11;
 		let vector_store: Vec<Vec<Vec<UDisplayRep>>> = (0..samples).map(|_x| display_format(gen_square(60))).collect();
 
+		// for sample in vector_store.iter() { super::tui::print_2d_vec(&sample); println!(); }
 		let mut mean_vector = Vec::with_capacity(size * size);
 		let mut dev_vector = Vec::with_capacity(size * size);
 		
@@ -521,26 +518,27 @@ mod tests {
 	//could also try [bench] here.
     fn get_samples() {
 		let total_time = Instant::now();
-		let samples: u32 = 10;
+		let samples: u32 = 100;
 		let min_size = 40;
-		let max_size = 50;
+		let max_size = 60;
 
 		for n in min_size..max_size + 1 {
-			let mut cum_attempts = 0;
-			let mut cum_time_millis = 0;
+			let mut cum_time_millis = total_time.elapsed().as_millis();
 			
-			for _k in 0..samples {
-				let result = gen_square_prob_with_metrics(n, &mut cum_attempts, &mut cum_time_millis);
-				assert!(result.len() == usize::try_from(n).unwrap());
-			}	
+			let _results: Vec<Vec<Vec<UBitRep>>> = (0..samples).into_iter().map(|_x| gen_square(n)).collect();
 
-			//Not intended for more than 2 digits.
-			let average_attempts = f64::try_from(cum_attempts).unwrap() / f64::try_from(samples).unwrap();
-			println!("N: {:>2} | {:>3} | {:>3} |", n, cum_attempts, average_attempts);
+			cum_time_millis = total_time.elapsed().as_millis() - cum_time_millis;
+			println!("N: {:>3} | {:>5} |", n, cum_time_millis);
 		}
 
 		println!("Test suite ran for {} seconds.", total_time.elapsed().as_secs());
     }
+	
+	#[test]
+	#[should_panic]
+	fn oversize_square() {
+		gen_square(20000);
+	}
 
 	#[test]
 	fn test_latin_culler() {

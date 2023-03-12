@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-2.0-only"
 description = "Function for generating Latin squares and subsets of Latin squares (e.g. Sudoku or Towers/Skyscraper)."
+readme = "README.md"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 moon_math = "0.1.0"
 moon_stats = "0.1.0"
-num = "0.4.0"

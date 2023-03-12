@@ -19,7 +19,7 @@ pub mod tui {
 }
 
 pub mod latin_square {
-	use moon_math::moon_math::{rand_usize, shuffle_vec};
+	use moon_math::moon_math::rand_usize;
 
 	pub type UBitRep = u128;
 	pub type UDisplayRep = u32;
@@ -167,8 +167,8 @@ pub mod latin_square {
 				col_start *= 3;
 				let mut row_start = subsquare / 3;
 				row_start *= 3;
-				let mut row_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
-				let mut col_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|x| vec![0, 0, 0]).collect();
+				let mut row_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|_x| vec![0, 0, 0]).collect();
+				let mut col_possibility_array: Vec<Vec<usize>> = (0..side_length).into_iter().map(|_x| vec![0, 0, 0]).collect();
 				
 				let targets: Vec<(usize, usize)> = (0..9).into_iter().map(
 					|i| (i / 3, i % 3)
@@ -189,7 +189,7 @@ pub mod latin_square {
 				for k in 0..side_length {
 					if row_possibility_array[k].iter().sum::<usize>() == 1 {
 						let mut i = 0;
-						while(row_possibility_array[k][i] == 0) { i += 1; }
+						while row_possibility_array[k][i] == 0 { i += 1; }
 
 						let value = u128::try_from(k).unwrap();
 
@@ -204,7 +204,7 @@ pub mod latin_square {
 
 					if col_possibility_array[k].iter().sum::<usize>() == 1 {
 						let mut i = 0;
-						while(col_possibility_array[k][i] == 0) { i += 1; }
+						while col_possibility_array[k][i] == 0 { i += 1; }
 
 						let value = u128::try_from(k).unwrap();
 
@@ -371,7 +371,7 @@ pub mod latin_square {
 	pub fn bit_format(v: Vec2D<UDisplayRep>) -> Vec2D<UBitRep> {
 		//Turn a non-zero x into 2 ^^ (x - 1), else 0.
 		v.iter().map(|line|
-				line.iter().map(|x|
+			line.iter().map(|x|
 				to_bit(*x)
 			).collect()
 		).collect()
@@ -444,59 +444,124 @@ pub mod latin_square {
 
 	pub fn gen_sudoku(side_length: usize) -> Vec2D<UDisplayRep> {
 		let n = UDisplayRep::try_from(side_length).unwrap();
-		let mut square: Vec2D<UDisplayRep> = Vec::with_capacity(side_length);
-
-		// let prototype_row: Vec<UDisplayRep> = (1..10).collect();
+		if n != 9 { return Vec::new(); }
 		
-		// let mut new_row = prototype_row.clone();
-		// shuffle_vec(&mut new_row);
-		// let subsquare_a = vec!(&new_row[0..3]);
-		// let subsquare_b = vec!(&new_row[3..6]);
-		// let subsquare_c = vec!(&new_row[6..9]);
+		let prototype_line: Vec<UBitRep> = (0..n).into_iter().map(|x| 1 << x).collect();
+		let unconstrained_value = prototype_line.iter().sum();
+		let mut possibilities: Vec<UBitRep> = (0..n).into_iter().map(|_x| unconstrained_value).collect();
+		let mut square: Vec<Vec<UBitRep>> = Vec::with_capacity(side_length);
+		let mut sudoku_possibilities = possibilities.clone();
+		
+		for i in 0..(side_length - 1) {
+			let mut new_line = prototype_line.clone();
 
-		// let mut second_row_candidates = vec![
-		// 	subsquare_b.clone(),
-		// 	subsquare_a.clone(),
-		// 	subsquare_a.clone(),
-		// ];
-		// second_row_candidates[0].extend(subsquare_c.clone());
-		// second_row_candidates[1].extend(subsquare_c.clone());
-		// second_row_candidates[2].extend(subsquare_b.clone());
-
-
-		//1, 4, 7, 2, 5, 8, 3, 6, 9
-		//1 + 0, 1 + 4, 1 + 6, 1 + 9
-		for i in vec!(1, 4, 7, 2, 5, 8, 3, 6, 9) {
-			let new_line = (i..n + 1).chain(1..i).collect();
+			let mut count = 0;
+			loop {
+				if generate_valid_line(&mut new_line, &sudoku_possibilities) { break; }
+				count += 1;
+				if count == 100 { return Vec::new(); }
+			}
+			
 			square.push(new_line);
-		}
-		
-		for k in vec!(0, 3, 6) {
-			for i in 0..2 {
-				let target = 2 - i;
-				let mut source = rand_usize(target) % (target + 1);
 
-				if target != source {
-					let temp = square[k + target].clone();
-					square[k + target] = square[k + source].clone();
-					square[k + source] = temp;
+			for j in 0..side_length {
+				possibilities[j] &= !square[i][j];
+				sudoku_possibilities[j] &= !square[i][j];
+			}
+
+			if i % 3 == 2 {
+				sudoku_possibilities = possibilities.clone();
+			} else {
+				for j in 0..3 {
+					let line = &square[i];
+					let new_constraints = line[j * 3] | line[j * 3 + 1] | line[j * 3 + 2];
+
+					sudoku_possibilities[j * 3    ] &= !new_constraints;
+					sudoku_possibilities[j * 3 + 1] &= !new_constraints;
+					sudoku_possibilities[j * 3 + 2] &= !new_constraints;
 				}
-
-				source = rand_usize(target) % (target + 1);
-
-				if target != source {
-					for j in 0..side_length {
-						let temp = square[j][k + target];
-						square[j][k + target] = square[j][k + source];
-						square[j][k + source] = temp;
-					}
-				}
-
 			}
 		}
 
+		square.push(possibilities);
+		display_format(square)
+	}
+
+	pub fn collapse_row_possibilities(row: &mut Vec<UBitRep>, target: usize) -> bool {
+		for j in 0..row.len() {
+			if j == target { continue; }
+
+			if row[j] & row[target] != 0 {
+				row[j] &= ! row[target];
+				
+				match count_cell_possibilities(row[j]) {
+					0 => return false,
+					1 => if !(collapse_row_possibilities(row, j)) { return false; },
+					_ => continue
+				}
+			}
+		}
+		true
+	}
+
+	pub fn generate_valid_line(line: &mut Vec<UBitRep>, possibilities: &Vec<UBitRep>) -> bool {
+		let n = line.len();
+		let mut local_possibilities = possibilities.clone();
+
+		//Inplace shuffle to reduce allocations.
+		for i in 0..n {
+			let mut misses: usize = 0;
+			
+			while misses + i < n {
+				let rand_index = i + rand_usize(i) % (n - i - misses);
+				let temp = line[rand_index];
+
+				if local_possibilities[i] & temp > 0 {
+					line[rand_index] = line[i];
+					line[i] = temp;
+					local_possibilities[i] = temp;
+					if !(collapse_row_possibilities(&mut local_possibilities, i)) { /*println!("NRRRRRRR");*/ return false; }
+					break;
+				} else {
+					line[rand_index] = line[n - misses - 1];
+					line[n - misses - 1] = temp;
+					misses += 1;
+				}
+			}
+		}
+
+		true
+	}
+
+	pub fn generate_square_prob_collapse(n: usize) -> Vec<Vec<UBitRep>> {
+		let prototype_line: Vec<UBitRep> = (0..n).into_iter().map(|x| 1 << x).collect();
+		let side_length = prototype_line.len();
+		
+		let unconstrained_value = prototype_line.iter().sum();
+		let mut possibilities: Vec<UBitRep> = (0..n).into_iter().map(|_x| unconstrained_value).collect();
+		let mut square: Vec<Vec<UBitRep>> = Vec::with_capacity(side_length);
+
+		for i in 0..(side_length - 1) {
+			let mut new_line = prototype_line.clone();
+
+			let mut count = 0;
+			loop {
+				if generate_valid_line(&mut new_line, &possibilities) { break; }
+				count += 1;
+				if count == 100 { return Vec::new(); }
+			}
+			
+			square.push(new_line);
+
+			for j in 0..side_length {
+				possibilities[j] &= !square[i][j];
+			}
+		}
+
+		square.push(possibilities);
 		square
 	}
+
 }
 
 #[cfg(test)]
@@ -667,7 +732,7 @@ mod tests {
 		super::tui::print_2d_vec(&latin_square);
 		println!();
 
-		latin_square = cull(latin_square, 3 * n * n / 5);
+		latin_square = cull(latin_square, 2 * n * n / 5);
 		super::tui::print_2d_vec(&latin_square);
 		println!();
 		// let latin_squares = solve(latin_square);
@@ -681,13 +746,5 @@ mod tests {
 			super::tui::print_2d_vec(&latin_squares[0]);
 		}
 		println!("\nTEST_LATIN_SOLVER: {}", latin_squares.len());
-
-		let mut c = 4 / 3;
-		let mut d = 5 / 3;
-		let mut e = 6 / 3;
-		c = c * 3;
-		d = d * 3;
-		e = e * 3;
-		println!("{} {} {}", c, d, e);
 	}
 }

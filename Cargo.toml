@@ -1,6 +1,6 @@
 [package]
 name = "latin_squares"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "GPL-2.0-only"
 description = "Function for generating Latin squares and subsets of Latin squares (e.g. Sudoku or Towers/Skyscraper)."

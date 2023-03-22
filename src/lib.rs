@@ -20,6 +20,8 @@ pub mod tui {
 
 use moon_math::rand_usize;
 
+use crate::tui::print_2d_vec;
+
 pub type UBitRep = u128;
 pub type UDisplayRep = u32;
 
@@ -35,6 +37,10 @@ pub trait LatinSquare {
 	fn heuristic_place_and_update(&self, square: &mut Vec2D<UBitRep>, new_value: &UBitRep, coord1: usize, coord2: usize) -> bool { return true; }
 
 	fn solve(&self) -> Vec<Vec<Vec<UBitRep>>> {
+		self.solve_square(false)
+	}
+
+	fn solve_square(&self, single_outcome: bool) -> Vec<Vec<Vec<UBitRep>>> {
 		let square = self.get_square();
 		let square = bit_format(square);
 		let side_length = square.len();
@@ -42,9 +48,13 @@ pub trait LatinSquare {
 		let mut partial_solutions = Vec::new();
 		
 		let mut analytics = LatinAnalytics::default();
-		let mut count = 0;
+		// let mut count = 0;
 
 		let mut working_square = Self::preprocess(&self, &square);
+		if working_square.is_empty() {
+			return solutions;
+		}
+
 		loop {
 			loop {
 				working_square = self.heuristic_solve(working_square);
@@ -56,15 +66,18 @@ pub trait LatinSquare {
 			
 			if analytics.cumulative_possibilities == 0 && analytics.valid {
 				solutions.push(working_square);
-			}  else if !analytics.analytics_updated {
+				if single_outcome && solutions.len() > 1 { return solutions; }
+			}  else if !analytics.analytics_updated && analytics.valid {
 				//If the loop wraps around with no progress, make a guess.
 				let (i, j) = analytics.lowest_possibilities;
 				let cell = working_square[i][j];
-				let branching_values: Vec<UBitRep> = (0..side_length).map(|x| 1 << x & cell).filter(|x| *x > 0).collect();
+				let branching_values: Vec<UBitRep> = (0..side_length).map(|x| 1 << x & cell).filter(|&x| x > 0).collect();
+				let mut counter = 0;
 				for new_val in branching_values {
 					let mut new_square = working_square.clone(); 
 					if self.place_and_update(&mut new_square, &new_val, i, j) {
 						partial_solutions.push(new_square);
+						counter = counter + 1;
 					}
 				}
 			}
@@ -74,8 +87,8 @@ pub trait LatinSquare {
 				None => return solutions
 			}
 
-			count += 1;
-			if count == 100 { println!("Partial solutions: {}", partial_solutions.len()); return solutions; }
+			// count += 1;
+			// if count == 1000 { return solutions; }
 		}
 	}
 
@@ -100,8 +113,10 @@ pub trait LatinSquare {
 				let possibility_check = target & (target - 1);
 				if possibility_check == 0 {
 					let new_value = target;
-					self.place_and_update(working_square, &new_value, coord.0, coord.1);
-					self.heuristic_place_and_update(working_square, &new_value, coord.0, coord.1);
+					if !self.place_and_update(working_square, &new_value, coord.0, coord.1) ||
+							!self.heuristic_place_and_update(working_square, &new_value, coord.0, coord.1) {
+						return false;
+					}
 				}	
 			}
 		}
@@ -121,8 +136,10 @@ pub trait LatinSquare {
 		for i in 0..side_length {
 			for j in 0..side_length {
 				if square[i][j] == 0 || square[i][j] & (square[i][j] - 1) > 0 { continue; }
-				self.place_and_update(&mut working_square, &square[i][j], i, j);
-				self.heuristic_place_and_update(&mut working_square, &square[i][j], i, j);
+				if !self.place_and_update(&mut working_square, &square[i][j], i, j) ||
+				 		!self.heuristic_place_and_update(&mut working_square, &square[i][j], i, j) {
+					return Vec::new();
+				}
 			}
 		}
 
@@ -157,7 +174,6 @@ impl LatinSquare for Sudoku {
 
 	// fn heuristic_constraint(&self, mut working_square)
 	fn heuristic_solve(&self, mut working_square: Vec<Vec<UBitRep>>) -> Vec<Vec<UBitRep>> {
-		return working_square;
 		let side_length = working_square.len();
 		if side_length != 9 { panic!("Sudoku has been made that is not side length 9."); }
 
@@ -190,14 +206,14 @@ impl LatinSquare for Sudoku {
 					let mut i = 0;
 					while row_possibility_array[k][i] == 0 { i += 1; }
 
-					let value = u128::try_from(k).unwrap();
-
+					let value = 1 << u128::try_from(k).unwrap();
+					
 					for col in 0..col_start {
-						working_square[i][col] &= !value;
+						working_square[row_start + i][col] &= !value;
 					}
 
 					for col in col_start + 3..side_length {
-						working_square[i][col] &= !value;
+						working_square[row_start + i][col] &= !value;
 					}
 				}
 
@@ -205,14 +221,14 @@ impl LatinSquare for Sudoku {
 					let mut i = 0;
 					while col_possibility_array[k][i] == 0 { i += 1; }
 
-					let value = u128::try_from(k).unwrap();
+					let value = 1 << u128::try_from(k).unwrap();
 
-					for row in 0..col_start {
-						working_square[row][i] &= !value;
+					for row in 0..row_start {
+						working_square[row][col_start + i] &= !value;
 					}
 
-					for row in col_start + 3..side_length {
-						working_square[row][i] &= !value;
+					for row in row_start + 3..side_length {
+						working_square[row][col_start + i] &= !value;
 					}
 				}
 			}
@@ -249,7 +265,9 @@ impl LatinSquare for Sudoku {
 				let possibility_check = target & (target - 1);
 				if possibility_check == 0 {
 					let new_value = target;
-					self.place_and_update(working_square, &new_value, coord.0, coord.1);
+					if !self.place_and_update(working_square, &new_value, coord.0, coord.1) {
+						return false;
+					}
 				}	
 			}
 		}
@@ -325,6 +343,7 @@ fn analyse_square(square: &Vec<Vec<UBitRep>>, prev_analytics: LatinAnalytics) ->
 	*/
 pub fn cull<T>(mut working_square: Vec<Vec<T>>, n: usize) -> Vec<Vec<T>> where T: std::marker::Copy + std::cmp::PartialEq + std::ops::Sub<Output = T> {
 	// let mut working_square = square.clone();
+	if working_square.is_empty() || working_square[0].is_empty() { return working_square; }
 	let side_length = working_square.len();
 	let zero: T = working_square[0][0] - working_square[0][0];
 
@@ -351,6 +370,36 @@ pub fn cull<T>(mut working_square: Vec<Vec<T>>, n: usize) -> Vec<Vec<T>> where T
 		valid_matrix_indices[i].remove(relative_j);
 		if valid_matrix_indices[i].len() == 0 {
 			valid_row_indices.remove(relative_i);
+		}
+
+		k += 1;
+
+		if k == n { break; }
+
+		let conj_i = side_length - 1 - i;
+		let conj_j = side_length - 1 - j;
+
+		let conj_i_pos = valid_row_indices.iter().position(|&x| x == conj_i);
+
+		match conj_i_pos {
+			None => continue,
+			_ => ()
+		}
+		let conj_i_pos = conj_i_pos.unwrap();
+
+		let conj_j_pos = valid_matrix_indices[conj_i_pos].iter().position(|&x| x == conj_j);
+
+		match conj_j_pos {
+			None => continue,
+			_ => ()
+		}
+		let conj_j_pos = conj_j_pos.unwrap();
+
+		working_square[conj_i][conj_j] = zero;
+		
+		valid_matrix_indices[conj_i_pos].remove(conj_j_pos);
+		if valid_matrix_indices[conj_i_pos].len() == 0 {
+			valid_row_indices.remove(conj_i_pos);
 		}
 
 		k += 1;
@@ -486,9 +535,20 @@ pub fn gen_sudoku(side_length: usize) -> Vec2D<UDisplayRep> {
 	display_format(square)
 }
 
+pub fn generate_sudoku(side_length: usize) -> Vec2D<UDisplayRep> {
+	loop {
+		let sudoku = gen_sudoku(side_length);
+		if !sudoku.is_empty() {
+			return sudoku;
+		}
+	}
+}
+
+
 pub fn collapse_row_possibilities(row: &mut Vec<UBitRep>, target: usize) -> bool {
 	for j in 0..row.len() {
 		if j == target { continue; }
+		if row[j] == 0 { return false; }
 
 		if row[j] & row[target] != 0 {
 			row[j] &= ! row[target];
@@ -519,7 +579,7 @@ pub fn generate_valid_line(line: &mut Vec<UBitRep>, possibilities: &Vec<UBitRep>
 				line[rand_index] = line[i];
 				line[i] = temp;
 				local_possibilities[i] = temp;
-				if !(collapse_row_possibilities(&mut local_possibilities, i)) { /*println!("NRRRRRRR");*/ return false; }
+				if !(collapse_row_possibilities(&mut local_possibilities, i)) { return false; }
 				break;
 			} else {
 				line[rand_index] = line[n - misses - 1];
@@ -595,7 +655,6 @@ mod tests {
 		let size = 60;
 		let vector_store: Vec<Vec<Vec<UDisplayRep>>> = (0..samples).map(|_x| gen_square(size)).collect();
 
-		// for sample in vector_store.iter() { super::tui::print_2d_vec(&sample); println!(); }
 		let mut mean_vector = Vec::with_capacity(size * size);
 		let mut dev_vector = Vec::with_capacity(size * size);
 		
@@ -722,25 +781,78 @@ mod tests {
 	#[test]
 	fn test_sudoku_solver() {
 		let n = 9;
-		let mut latin_square = gen_sudoku(n);
+		let mut sudoku = generate_sudoku(n);
 
 		println!("Initial square...");
-		super::tui::print_2d_vec(&latin_square);
+		super::tui::print_2d_vec(&sudoku);
 		println!();
 
-		latin_square = cull(latin_square, 2 * n * n / 5);
-		super::tui::print_2d_vec(&latin_square);
+		sudoku = cull(sudoku, 3 * n * n / 5);
+		super::tui::print_2d_vec(&sudoku);
 		println!();
 		// let latin_squares = solve(latin_square);
 
-		let latin = Sudoku {
-			square: latin_square
+		let latin = DefaultLatinSquare {
+			square: sudoku.clone()
+		};
+		let solver = Sudoku {
+			square: sudoku
 		};
 
-		let latin_squares = latin.solve();
-		if latin_squares.len() > 0 {
-			super::tui::print_2d_vec(&latin_squares[0]);
+		let sudoku_solutions = solver.solve();
+		let latin_solutions = latin.solve();
+		if sudoku_solutions.len() > 0 {
+			super::tui::print_2d_vec(&sudoku_solutions[0]);
 		}
-		println!("\nTEST_LATIN_SOLVER: {}", latin_squares.len());
+		println!("\nTEST_SUDOKU_SOLVER: {} vs {}", sudoku_solutions.len(), latin_solutions.len());
+	}
+
+	#[test]
+	fn test_sudoku_single_answer_generation() {
+		let n = 9;
+		let mut sudoku = generate_sudoku(n);
+
+		let mut zero_present = false;
+		for row in &sudoku {
+			for val in row {
+				if *val == 0 {
+					zero_present = true;
+				}
+			}
+		}
+		if zero_present {
+			panic!("Bad sudoku generated");
+		}
+
+		println!("Initial square...");
+		super::tui::print_2d_vec(&sudoku);
+		println!();
+
+		let mut total_removed_members = 0;
+		let mut stall_counter = 0;
+
+		while total_removed_members < 81 - 17 {
+			let removal_count = ((n * n - total_removed_members) / 5) - stall_counter / 4;
+			if removal_count == 0 { break; }
+			let temp_sudoku = cull(sudoku.clone(), removal_count);
+			
+			let solver = Sudoku {
+				square: temp_sudoku.clone()
+			};
+
+			let sudoku_solutions = solver.solve_square(true);
+			if sudoku_solutions.len() == 1 {
+				sudoku = temp_sudoku;
+				total_removed_members += removal_count;
+				stall_counter = 0;
+			} else {
+				stall_counter += 1;
+			}
+		}
+
+		println!("Removed {total_removed_members} items from square.");
+
+		super::tui::print_2d_vec(&sudoku);
+
 	}
 }
